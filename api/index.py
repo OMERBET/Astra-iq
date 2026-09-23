@@ -1,16 +1,42 @@
 """
 ASTRA — AI Space Sentinel
 Single FastAPI app deployed as one Vercel Python Function.
-Routes are defined with the /api prefix so vercel.json can route every
-/api/* request to this one file (see vercel.json rewrites).
+Vercel auto-detects this file (api/index.py) and routes every
+/api/* request to it — no vercel.json needed.
 """
 
-from fastapi import FastAPI, HTTPException
+import os
+import sys
+import traceback
+
+# Vercel's Python runtime doesn't automatically add this file's own
+# directory to sys.path, so a plain "import gee_engine" fails in
+# production even though it works locally. Add it explicitly.
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 import gee_engine as engine
 
 app = FastAPI(title="ASTRA — AI Space Sentinel")
+
+
+@app.exception_handler(Exception)
+async def debug_exception_handler(request: Request, exc: Exception):
+    # TEMPORARY: surfaces the real Python error in the browser while we
+    # debug the deployment. Remove/replace with a generic message once
+    # everything is confirmed working.
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": str(exc),
+            "type": type(exc).__name__,
+            "traceback": traceback.format_exc().splitlines()[-15:],
+        },
+    )
+
 
 _ee_ready = False
 
