@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>ASTRA — AI Space Sentinel</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0e14;
+    --panel: #10161f;
+    --panel-2: #151d29;
+    --line: #212b38;
+    --text: #e7ebf0;
+    --muted: #8a97a8;
+    --signal: #4fd1c5;
+    --signal-dim: #245852;
+    --warn: #f0a94e;
+    --alert: #e5555a;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    height: 100%;
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', -apple-system, sans-serif;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+
+  header {
+    padding: 22px 28px 18px;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  header h1 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+  }
+  header h1 span { color: var(--signal); }
+  header p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 14px;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    min-height: calc(100% - 78px);
+  }
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: 1fr; }
+  }
+
+  .controls {
+    border-left: 1px solid var(--line);
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow-y: auto;
+  }
+  .field label {
+    display: block;
+    font-size: 12.5px;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .field select, .field input {
+    width: 100%;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    color: var(--text);
+    padding: 9px 10px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: inherit;
+  }
+  .field input:focus, .field select:focus {
+    outline: none;
+    border-color: var(--signal);
+  }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  .period {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 12px;
+  }
+  .period-title { font-size: 12.5px; color: var(--signal); margin-bottom: 10px; font-weight: 600; }
+
+  button#analyzeBtn {
+    margin-top: 4px;
+    background: var(--signal);
+    color: #06201d;
+    border: none;
+    padding: 12px 14px;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 14.5px;
+    cursor: pointer;
+  }
+  button#analyzeBtn:hover { background: #66e0d4; }
+  button#analyzeBtn:disabled { background: var(--signal-dim); color: var(--muted); cursor: progress; }
+
+  main { position: relative; display: flex; flex-direction: column; }
+  #map { flex: 1; min-height: 320px; }
+
+  #results {
+    border-top: 1px solid var(--line);
+    background: var(--panel);
+    padding: 20px 24px;
+    display: none;
+  }
+  #results.show { display: block; }
+
+  .result-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  .severity-tag {
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-weight: 600;
+  }
+  .sev-low { background: rgba(79,209,197,0.15); color: var(--signal); }
+  .sev-medium { background: rgba(240,169,78,0.15); color: var(--warn); }
+  .sev-high { background: rgba(229,85,90,0.15); color: var(--alert); }
+
+  .result-head .pct { font-size: 26px; font-weight: 700; }
+  .result-head .idx-label { color: var(--muted); font-size: 13px; }
+
+  .explanation {
+    color: var(--text);
+    font-size: 14.5px;
+    line-height: 1.6;
+    max-width: 640px;
+    margin-bottom: 18px;
+  }
+
+  .thumbs { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; max-width: 720px; }
+  .thumb { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .thumb img { width: 100%; display: block; background: #05080c; }
+  .thumb-label {
+    font-size: 11.5px;
+    color: var(--muted);
+    padding: 6px 10px;
+    border-top: 1px solid var(--line);
+  }
+
+  #status { color: var(--muted); font-size: 13px; margin-top: 10px; min-height: 18px; }
+  #status.err { color: var(--alert); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>ASTRA <span>· AI Space Sentinel</span></h1>
+  <p>يحوّل صور الأقمار الصناعية إلى إنذار مبكر قابل للفهم</p>
+</header>
+
+<div class="layout">
+  <div class="controls">
+    <div class="field">
+      <label>المنطقة</label>
+      <select id="regionSelect">
+        <option value="44.2,33.2,44.5,33.4">بغداد وضواحيها</option>
+        <option value="47.6,30.4,47.9,30.6">البصرة والأهوار</option>
+        <option value="43.6,36.2,43.9,36.4">دهوك</option>
+        <option value="custom">تحديد يدوي (ارسم على الخريطة)</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label>المؤشر المستخدم</label>
+      <select id="indexSelect">
+        <option value="NDVI">NDVI — الغطاء النباتي</option>
+        <option value="NDWI">NDWI — المسطحات المائية</option>
+      </select>
+    </div>
+
+    <div class="period">
+      <div class="period-title">الفترة المرجعية (Before)</div>
+      <div class="row2">
+        <div class="field"><label>من</label><input type="date" id="beforeStart" value="2023-01-01"></div>
+        <div class="field"><label>إلى</label><input type="date" id="beforeEnd" value="2023-03-01"></div>
+      </div>
+    </div>
+
+    <div class="period">
+      <div class="period-title">فترة المقارنة (After)</div>
+      <div class="row2">
+        <div class="field"><label>من</label><input type="date" id="afterStart" value="2024-01-01"></div>
+        <div class="field"><label>إلى</label><input type="date" id="afterEnd" value="2024-03-01"></div>
+      </div>
+    </div>
+
+    <button id="analyzeBtn">تشغيل التحليل</button>
+    <div id="status" class="mono"></div>
+  </div>
+
+  <main>
+    <div id="map"></div>
+    <div id="results">
+      <div class="result-head">
+        <span id="sevTag" class="severity-tag sev-low">—</span>
+        <span class="pct mono" id="pctValue">0%</span>
+        <span class="idx-label" id="idxLabel"></span>
+      </div>
+      <p class="explanation" id="explanationText"></p>
+      <div class="thumbs">
+        <div class="thumb">
+          <img id="beforeImg" alt="before" />
+          <div class="thumb-label mono">BEFORE</div>
+        </div>
+        <div class="thumb">
+          <img id="afterImg" alt="after" />
+          <div class="thumb-label mono">AFTER</div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+  const map = L.map('map', { zoomControl: true }).setView([33.3, 44.35], 7);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors',
+    maxZoom: 18
+  }).addTo(map);
+
+  let rectLayer = null;
+  function drawRegion(minLon, minLat, maxLon, maxLat) {
+    if (rectLayer) map.removeLayer(rectLayer);
+    const bounds = [[minLat, minLon], [maxLat, maxLon]];
+    rectLayer = L.rectangle(bounds, { color: '#4fd1c5', weight: 2, fillOpacity: 0.08 }).addTo(map);
+    map.fitBounds(bounds, { padding: [40, 40] });
+  }
+
+  const regionSelect = document.getElementById('regionSelect');
+  function currentRegion() {
+    const val = regionSelect.value;
+    if (val === 'custom') return null; // drawing on map not implemented in this prototype
+    return val.split(',').map(Number);
+  }
+  regionSelect.addEventListener('change', () => {
+    const r = currentRegion();
+    if (r) drawRegion(...r);
+  });
+  drawRegion(...currentRegion());
+
+  const statusEl = document.getElementById('status');
+  const analyzeBtn = document.getElementById('analyzeBtn');
+  const results = document.getElementById('results');
+
+  analyzeBtn.addEventListener('click', async () => {
+    const region = currentRegion();
+    if (!region) {
+      statusEl.textContent = 'التحديد اليدوي غير مفعّل بعد بهذا النموذج الأولي — اختر منطقة من القائمة.';
+      statusEl.classList.add('err');
+      return;
+    }
+    const [min_lon, min_lat, max_lon, max_lat] = region;
+    const body = {
+      min_lon, min_lat, max_lon, max_lat,
+      before_start: document.getElementById('beforeStart').value,
+      before_end: document.getElementById('beforeEnd').value,
+      after_start: document.getElementById('afterStart').value,
+      after_end: document.getElementById('afterEnd').value,
+      index: document.getElementById('indexSelect').value
+    };
+
+    analyzeBtn.disabled = true;
+    statusEl.classList.remove('err');
+    statusEl.textContent = 'جارٍ سحب صور الأقمار الصناعية وتحليلها... قد تستغرق العملية بضع ثوانٍ.';
+    results.classList.remove('show');
+
+    try {
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.detail || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      renderResult(data);
+      statusEl.textContent = 'اكتمل التحليل.';
+    } catch (err) {
+      statusEl.textContent = 'صار خطأ: ' + err.message;
+      statusEl.classList.add('err');
+    } finally {
+      analyzeBtn.disabled = false;
+    }
+  });
+
+  function renderResult(data) {
+    const tag = document.getElementById('sevTag');
+    tag.className = 'severity-tag sev-' + data.severity;
+    tag.textContent = data.severity === 'low' ? 'طبيعي' : data.severity === 'medium' ? 'تنبيه متوسط' : 'تنبيه مرتفع';
+
+    document.getElementById('pctValue').textContent =
+      (data.percent_change > 0 ? '+' : '') + data.percent_change + '%';
+    document.getElementById('idxLabel').textContent = data.index + ' · ' + data.direction;
+    document.getElementById('explanationText').textContent = data.explanation;
+    document.getElementById('beforeImg').src = data.before_thumbnail;
+    document.getElementById('afterImg').src = data.after_thumbnail;
+
+    results.classList.add('show');
+  }
+</script>
+</body>
+</html>
