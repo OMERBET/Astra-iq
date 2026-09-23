@@ -15,24 +15,21 @@ import traceback
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 from pydantic import BaseModel, Field
 
 import gee_engine as engine
+from frontend import INDEX_HTML
 
 app = FastAPI(title="ASTRA — AI Space Sentinel")
-
-# path to index.html at the project root (one level up from this api/ file)
-_INDEX_HTML = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "..", "index.html"
-)
 
 
 @app.get("/")
 def serve_frontend():
     # Vercel routes every request through this FastAPI app (not just /api/*),
-    # so the frontend page itself has to be served from here explicitly.
-    return FileResponse(_INDEX_HTML, media_type="text/html")
+    # and sibling project files aren't bundled with the function, so the
+    # frontend HTML is embedded directly in Python (see frontend.py).
+    return HTMLResponse(INDEX_HTML)
 
 
 @app.exception_handler(Exception)
